@@ -1,0 +1,64 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #090c0b;
+  --foreground: #e4ebe7;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0d1210;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e2824;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #2b3a34;
+}
+
+/* Clean dark panels with high contrast borders */
+.panel-surface {
+  background: #0e1311;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.panel-surface-elevated {
+  background: #131916;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Subtle grid */
+.bg-grid-subtle {
+  background-size: 32px 32px;
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+}
+
+/* Minecraft Color Codes */
+.mc-color-a { color: #55FF55; }
+.mc-color-e { color: #FFFF55; }
+.mc-color-6 { color: #FFAA00; }
+.mc-color-c { color: #FF5555; }
+.mc-color-b { color: #55FFFF; }
+.mc-color-d { color: #FF55FF; }
+.mc-color-7 { color: #AAAAAA; }
+.mc-color-f { color: #FFFFFF; }
