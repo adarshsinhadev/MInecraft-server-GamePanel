@@ -1,0 +1,17 @@
+node_modules/
+.env
+.env.*
+!.env.example
+
+/generated/prisma/
+prisma/*.db
+prisma/*.db-journal
+*.log
+
+# Local databases and session data
+*.sqlite
+*.sqlite3
+
+# Local backups and backup snapshots
+/backups/
+*.backup-*

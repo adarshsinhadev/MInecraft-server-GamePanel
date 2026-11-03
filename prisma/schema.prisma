@@ -1,0 +1,43 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Admin {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  passwordHash String
+  secretHash   String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  action    String
+  details   String?
+  createdAt DateTime @default(now())
+}
+
+model Player {
+  id          String          @id @default(cuid())
+  uuid        String?         @unique
+  username    String
+  firstSeen   DateTime        @default(now())
+  lastSeen    DateTime        @default(now())
+  totalPlaytime Int           @default(0)
+  sessions    PlayerSession[]
+}
+
+model PlayerSession {
+  id        String    @id @default(cuid())
+  playerId  String
+  joinedAt  DateTime  @default(now())
+  leftAt    DateTime?
+  duration  Int       @default(0)
+  player    Player    @relation(fields: [playerId], references: [id], onDelete: Cascade)
+}
