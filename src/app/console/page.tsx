@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { io, Socket } from "socket.io-client";
+import { getSocketTicket } from "@/lib/api";
 import { useServer } from "@/context/ServerContext";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -46,14 +47,25 @@ export default function ConsolePage() {
 
   useEffect(() => {
     const hostname = window.location.hostname;
-    if (hostname !== "localhost" && hostname !== "127.0.0.1") {
-      setConnection("error");
-      return;
-    }
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL ||
+      `${window.location.protocol}//${hostname}:3001`;
 
-    const socket = io(`${window.location.protocol}//${hostname}:3001`, {
-      withCredentials: true,
+    const socket = io(socketUrl, {
+      withCredentials: false,
       autoConnect: false,
+      auth: (callback) => {
+        void getSocketTicket()
+          .then((result) => {
+            if (result.success !== true || typeof result.ticket !== "string" || !result.ticket.trim()) {
+              throw new Error("Socket authentication ticket was invalid");
+            }
+            callback({ ticket: result.ticket });
+          })
+          .catch(() => {
+            setConnection("error");
+            callback({});
+          });
+      },
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,

@@ -8,6 +8,12 @@ export interface PlayersResponse {
   totals: unknown;
 }
 
+export interface SocketTicketResponse {
+  success: boolean;
+  ticket: string;
+  expiresIn: number;
+}
+
 export class ApiClientError extends Error {
   readonly status: number;
   readonly details: unknown;
@@ -99,6 +105,10 @@ export function getCurrentUser<TResponse = unknown>(): Promise<TResponse> {
 
 export function logout<TResponse = unknown>(): Promise<TResponse> {
   return requestJson<TResponse>("/api/auth/logout", { method: "POST" });
+}
+
+export function getSocketTicket(): Promise<SocketTicketResponse> {
+  return requestJson<SocketTicketResponse>("/api/auth/socket-ticket", { method: "POST" });
 }
 
 export function getServerStatus<TResponse = unknown>(): Promise<TResponse> {
