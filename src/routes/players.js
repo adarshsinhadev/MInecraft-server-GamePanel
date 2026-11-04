@@ -46,9 +46,8 @@ function getPlaytime(uuid) {
 }
 
 function getOnlineNames(output) {
-  const match = output.match(/online:\s*(.*)$/i);
+  const match = String(output || "").match(/online:\s*(.*)$/im);
   if (!match || !match[1].trim()) return [];
-
   return match[1]
     .split(",")
     .map((name) => name.trim())
@@ -102,11 +101,20 @@ async function executePlayerCommand(command) {
 // GET /api/players
 router.get("/", async (req, res) => {
   try {
-    const [cache, bans, whitelist, onlineResult] = await Promise.all([
+    const [cache, bans, whitelist, onlineResult, trackedPlayers] = await Promise.all([
       Promise.resolve(readJson(USER_CACHE)),
       Promise.resolve(readJson(BAN_FILE)),
       Promise.resolve(readJson(WHITELIST_FILE)),
-      rcon.execute("list")
+      rcon.execute("list"),
+      prisma.player.findMany({
+        include: {
+          sessions: {
+            where: { leftAt: null },
+            orderBy: { joinedAt: "desc" },
+            take: 1
+          }
+        }
+      })
     ]);
 
     if (!onlineResult.success) {
@@ -123,26 +131,56 @@ router.get("/", async (req, res) => {
       whitelist.map((p) => p.name.toLowerCase())
     );
 
+    const trackedByUuid = new Map();
+    const trackedByName = new Map();
+
+    for (const tracked of trackedPlayers) {
+      if (tracked.uuid) trackedByUuid.set(tracked.uuid, tracked);
+      trackedByName.set(tracked.username.toLowerCase(), tracked);
+    }
+
+    const now = Date.now();
+
     const players = cache.map((player) => {
       const username = player.name;
       const key = username.toLowerCase();
+      const online = onlineNames.some(
+        (name) => name.toLowerCase() === key
+      );
+
+      const tracked =
+        trackedByUuid.get(player.uuid) ||
+        trackedByName.get(key) ||
+        null;
+
+      const activeSession = tracked?.sessions?.[0] || null;
+      const trackedSeconds = tracked
+        ? tracked.totalPlaytime +
+          (activeSession
+            ? Math.max(0, Math.floor((now - activeSession.joinedAt.getTime()) / 1000))
+            : 0)
+        : 0;
+
+      const minecraftStatsSeconds = getPlaytime(player.uuid) * 3600;
+      const totalPlaytimeSeconds = Math.max(
+        minecraftStatsSeconds,
+        trackedSeconds
+      );
 
       return {
         id: player.uuid,
         uuid: player.uuid,
         name: username,
-        online: onlineNames.some(
-          (name) => name.toLowerCase() === key
-        ),
-        playtimeHours: getPlaytime(player.uuid),
+        online,
+        playtimeHours: totalPlaytimeSeconds / 3600,
         isBanned: bannedNames.has(key),
         isWhitelisted: whitelistedNames.has(key),
         banReason: bans.find(
           (p) => p.name.toLowerCase() === key
         )?.reason || null,
-        firstSeen: null,
-        lastSeen: null,
-        dataSource: "minecraft"
+        firstSeen: tracked?.firstSeen?.toISOString() || null,
+        lastSeen: tracked?.lastSeen?.toISOString() || null,
+        dataSource: tracked ? "tracked" : "minecraft"
       };
     });
 

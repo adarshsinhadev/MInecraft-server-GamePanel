@@ -3,10 +3,31 @@ const rcon = require("./rcon");
 
 const JOURNALCTL = "/usr/bin/journalctl";
 const MAX_LOG_LINE = 16384;
-const ALLOWED_ORIGINS = new Set([
+const DEFAULT_ALLOWED_ORIGINS = [
   "http://localhost:3000",
   "http://127.0.0.1:3000",
-]);
+];
+
+const ALLOWED_ORIGINS = new Set(
+  (process.env.FRONTEND_ORIGINS || DEFAULT_ALLOWED_ORIGINS.join(","))
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter((origin) => {
+      if (!origin) return false;
+
+      try {
+        const parsed = new URL(origin);
+        return (
+          (parsed.protocol === "https:" || parsed.protocol === "http:") &&
+          parsed.origin === origin &&
+          !parsed.username &&
+          !parsed.password
+        );
+      } catch {
+        return false;
+      }
+    })
+);
 
 function parseLogLine(line, sequence) {
   const match = line.match(/^(\S+)\s+\S+\s+([^:]+):\s?(.*)$/);
@@ -36,7 +57,7 @@ function parseLogLine(line, sequence) {
   };
 }
 
-function createConsole(io, sessionStore) {
+function createConsole(io, sessionStore, socketTickets) {
   const sockets = new Set();
   const rateWindows = new Map();
   const inFlight = new Set();
@@ -117,20 +138,31 @@ function createConsole(io, sessionStore) {
     if (!sockets.size) stopJournal();
   };
 
-  io.use((socket, next) => {
+  io.use(async (socket, next) => {
     const origin = socket.handshake.headers.origin;
+
     if (!ALLOWED_ORIGINS.has(origin)) {
       return next(new Error("Socket origin is not allowed."));
     }
-    const session = socket.request.session;
-    if (!session || session.authenticated !== true) {
-      return next(new Error("Authentication required."));
+
+    try {
+      const authentication = await socketTickets.consume(
+        socket.handshake.auth?.ticket
+      );
+
+      if (!authentication) {
+        return next(new Error("Authentication required."));
+      }
+
+      socket.data.sessionId = authentication.sessionId;
+      next();
+    } catch {
+      next(new Error("Authentication failed."));
     }
-    next();
   });
 
   io.on("connection", (socket) => {
-    const sessionId = socket.request.sessionID;
+    const sessionId = socket.data.sessionId;
     const sessionRoom = `session:${sessionId}`;
     sockets.add(socket);
     socket.join(sessionRoom);
@@ -189,6 +221,7 @@ function createConsole(io, sessionStore) {
 
   return {
     disconnectSession(sessionId) {
+      socketTickets.invalidateSession(sessionId);
       io.in(`session:${sessionId}`).disconnectSockets(true);
     },
     shutdown() {

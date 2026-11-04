@@ -1,8 +1,11 @@
 const express = require("express");
+const rateLimit = require("express-rate-limit");
 const bcrypt = require("bcrypt");
 const prisma = require("../lib/prisma");
 
 const router = express.Router();
+
+const requireAuth = require("../middleware/auth");
 
 router.post("/login", async (req, res) => {
   try {
@@ -85,6 +88,52 @@ router.post("/login", async (req, res) => {
   }
 });
 
+const socketTicketLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 20,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: "Too many socket authentication requests. Try again shortly."
+  }
+});
+
+router.post("/socket-ticket", socketTicketLimiter, requireAuth, (req, res) => {
+  try {
+    const socketTickets = req.app.get("socketTickets");
+
+    if (!socketTickets) {
+      return res.status(503).json({
+        success: false,
+        message: "Socket authentication is unavailable"
+      });
+    }
+
+    const result = socketTickets.issue(req.sessionID);
+
+    res.set("Cache-Control", "no-store");
+    return res.json({
+      success: true,
+      ticket: result.ticket,
+      expiresIn: result.expiresIn
+    });
+  } catch (error) {
+    if (error.message === "Too many pending socket tickets") {
+      return res.status(429).json({
+        success: false,
+        message: "Too many pending socket connections. Try again shortly."
+      });
+    }
+
+    console.error("Socket ticket creation failed:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Could not create socket authentication ticket"
+    });
+  }
+});
+
 router.get("/me", (req, res) => {
   if (!req.session?.authenticated) {
     return res.status(401).json({
@@ -112,7 +161,7 @@ router.post("/logout", (req, res) => {
     res.clearCookie("valoria.sid", {
       httpOnly: true,
       sameSite: "strict",
-      secure: false
+      secure: process.env.NODE_ENV === "production"
     });
 
     req.app.get("consoleService")?.disconnectSession(sessionId);
